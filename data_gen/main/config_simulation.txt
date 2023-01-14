@@ -1,0 +1,21 @@
+## If a sentence is started with "#", regard it as a comment.
+## We will use "split" function in #qulacs/cppsim/utility.hpp" to get the value.
+## Cannot allow the space(OK:"S:100", NG:"S : 100")
+#Random Unitary Operator(0:Haar, 1:Clifford, 2:LRC, 3:RDC)
+unitary_type:3
+#number of teacher data
+S:100
+#number of unitary
+Nu:100
+#number of sampling shot
+Ns:100
+#number of qubit
+Nq:4
+#circuit depth
+depth:5
+#seed of psudo random generator
+#seed:123
+#kind of noise(0:nothing, 1:DepolarizingNoise, 2:Measurement)
+noise_operator:2
+#probability of noise
+noise_prob:0.01

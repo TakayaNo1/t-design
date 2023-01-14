@@ -1,0 +1,9 @@
+result/
+qulacs/
+__pycache__/
+msvc_project/
+datasets/
+
+data_gen/main/main
+data_gen/main/msvc_project.exe
+fp/main

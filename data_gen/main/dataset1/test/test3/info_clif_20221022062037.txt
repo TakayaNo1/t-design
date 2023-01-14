@@ -1,0 +1,8 @@
+|S| : 100
+ Nu : 100
+ Ns : 100
+ Nq : 3
+depth : 3
+CNOT&1q clif : 1
+bit corrlation : 3
+dim of moments : 1~20

@@ -1,0 +1,5 @@
+**dataset1**
+(train,valid,test)=(1000,100,100)
+ Nu : 100
+ Ns : 100
+ Nq : 3

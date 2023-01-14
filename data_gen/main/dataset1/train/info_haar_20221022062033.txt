@@ -1,0 +1,6 @@
+|S| : 1000
+ Nu : 100
+ Ns : 100
+ Nq : 3
+ bit corrlation : 3
+ dim of moments : 1~20 
