@@ -16,6 +16,9 @@
 #include <cmath>
 #include <chrono>
 
+#include <boost/multiprecision/cpp_int.hpp>
+namespace mp = boost::multiprecision;
+
 ComplexMatrix my_tensor_product(ComplexMatrix A, ComplexMatrix B) {
     /** Function to compute the tensor product (Kronecker product, np.kron(A,B))
      *   Args:
@@ -141,11 +144,11 @@ enum CulculateType{
 class CliffordGroup{
 private:
     int Nq;
-    __uint128_t order=1;
+    mp::cpp_int order=1;
     std::vector<ComplexMatrix> A,B,C,D,E;
-    std::vector<unsigned int> Lcounts = {0};
-    std::vector<unsigned int> Rcounts = {0};
-    std::vector<unsigned int> Lsum = {0};
+    std::vector<mp::cpp_int> Lcounts = {0};
+    std::vector<mp::cpp_int> Rcounts = {0};
+    std::vector<mp::cpp_int> Lsum = {0};
 
     unsigned long long pow2(int n){
         unsigned long long r=1;
@@ -155,47 +158,47 @@ private:
     ComplexMatrix identity(long n){
         return Eigen::MatrixXd::Identity(n, n);
     }
-    ComplexMatrix pickM(int n, unsigned long long index){
+    ComplexMatrix pickM(int n, mp::cpp_int index){
         ComplexMatrix d, e, mat;
         mat=identity(pow2(n));
         
         for(int i=0;i<n-1;i++){
-            d=D[index%D.size()];
+            d=D[(int)(index%D.size())];
             index=index/D.size();
             d=my_tensor_product(identity(pow2(i)), d);
             d=my_tensor_product(d, identity(pow2(n-2-i)));
             mat=mat*d;
         }
 
-        e=E[index%E.size()];
+        e=E[(int)(index%E.size())];
         e=my_tensor_product(identity(pow2(n-1)), e);
         mat=mat*e;
         return mat;
     }
-    ComplexMatrix pickLm(int n,int m, unsigned long long index){
+    ComplexMatrix pickLm(int n,int m, mp::cpp_int index){
         assert(m<=n);
 
         //ComplexMatrix mat = Eigen::MatrixXd::Identity(N,N);
         ComplexMatrix a, b, c, mat;
-        a = A[index%A.size()];
+        a = A[(int)(index%A.size())];
         index = index/A.size();
         a=my_tensor_product(identity(pow2(m-1)), a);
         mat=my_tensor_product(a, identity(pow2(n-m)));
 
         for(int i=0;i<m-1;i++){
-            b=B[index%B.size()];
+            b=B[(int)(index%B.size())];
             index=index/B.size();
             b=my_tensor_product(identity(pow2(m-2-i)),b);
             b=my_tensor_product(b,identity(pow2(n-m+i)));
             mat=mat*b;
         }
 
-        c=C[index%C.size()];
+        c=C[(int)(index%C.size())];
         c=my_tensor_product(c,identity(pow2(n-1)));
         mat=mat*c;
         return mat;
     }
-    ComplexMatrix pickL(int n, unsigned long long index){
+    ComplexMatrix pickL(int n, mp::cpp_int index){
         assert(index < Lsum.back());
 
         ComplexMatrix mat;
@@ -278,15 +281,15 @@ public:
         }
     }
 
-    ComplexMatrix getElement(__uint128_t index){
+    ComplexMatrix getElement(mp::cpp_int index){
         assert(0 <= index && index < order);
 
         ComplexMatrix l, m, mat;
-        __uint128_t count=1;
+        mp::cpp_int count=1;
         mat=identity(pow2(Nq));
 
         for(int n=Nq;n>0;n--){
-            l=pickL(n,index%Lsum[n]);
+            l=pickL(n, index%Lsum[n]);
             index=index/Lsum[n];
             count*=Lsum[n];
             mat=mat*my_tensor_product(l, identity(pow2(Nq-n)));
@@ -304,9 +307,24 @@ public:
 
     ComplexMatrix sample(){
         Random random;
-        __uint128_t r1 = random.int64();
-        __uint128_t r2 = random.int64();
-        __uint128_t random_index = (r1<<64 | r2) % order;
+        // mp::cpp_int r1 = random.int64();
+        // mp::cpp_int r2 = random.int64();
+        // mp::cpp_int random_index = (r1<<64 | r2) % order;
+        
+        mp::cpp_int random_index = 0;
+        mp::cpp_int tmp=order, r;
+        while(tmp>0){
+            r = random.int64();
+            random_index = (random_index<<64) | r;
+            tmp=tmp>>64;
+        }
+        r = random.int64();
+        random_index = (random_index<<64) | r;
+        
+        
+        // std::cout<<random_index << ", "<<order <<std::endl;
+        random_index = random_index % order;
+        // std::cout<<random_index << ", "<<order <<std::endl;
         
         return getElement(random_index);
     }
@@ -438,12 +456,16 @@ void FramePotential::calculate() {
         // std::cout << "calculate time : " << msec << " milli sec." << std::endl;
         std::cout << total/count << std::endl;
     }else if(this->culcType == CulculateType::B12_Jackknife){
-        double total=0, result;
-        double results[this->num_sample*(this->num_sample-1)/2];
+        double total=0, result, total_n_th_value_deleted;
+        double *results=new double[this->num_sample*(this->num_sample-1)/2];
         std::vector<ComplexMatrix> samples;
+        double fp_sample;
+        double *fp_sample_n_th_value_deleted=new double[this->num_sample];
+        double *psi=new double[this->num_sample];
+        int i,j,n;
 
         // auto t1 = std::chrono::system_clock::now();
-        for(int i=0;i<this->num_sample;i++){
+        for(i=0;i<this->num_sample;i++){
             samples.push_back(sample_unitary());
         }
 
@@ -452,8 +474,8 @@ void FramePotential::calculate() {
         // auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
         // std::cout << "sample time : " << msec << " milli sec." << std::endl;
         
-        for(int i=0;i<this->num_sample;i++){
-            for(int j=i+1;j<this->num_sample;j++){
+        for(i=0;i<this->num_sample;i++){
+            for(j=i+1;j<this->num_sample;j++){
                 count++;
                 U=samples[i];
                 Vdag=samples[j].adjoint();
@@ -462,37 +484,34 @@ void FramePotential::calculate() {
                 total+=result;
             }
         }
-        double fp_sample = total/count;
-        double fp_sample_n_th_value_deleted[this->num_sample];
-        for(int n=0;n<this->num_sample;n++){
-            total=0;
-            count=0;
+        samples.clear();
+        fp_sample = total/count;
 
-            for(int i=0;i<this->num_sample;i++){
-                for(int j=i+1;j<this->num_sample;j++){
-                    if(i == n || j == n)continue;
+        for(n=0;n<this->num_sample;n++){
+            // total=0;
+            // count=0;
 
-                    count++;
-                    total+=results[i*this->num_sample-i*(i+1)/2+(j-i-1)];
-                }
+            // for(i=0;i<this->num_sample;i++){
+            //     for(j=i+1;j<this->num_sample;j++){
+            //         if(i == n || j == n)continue;
+
+            //         count++;
+            //         total+=results[i*this->num_sample-i*(i+1)/2+(j-i-1)];
+            //     }
+            // }
+            // fp_sample_n_th_value_deleted[n]=total/count;
+            total_n_th_value_deleted=total;
+            for(i=0;i<n;i++){
+                total_n_th_value_deleted-=results[i*this->num_sample-i*(i+1)/2+(n-i-1)];
             }
-
-            fp_sample_n_th_value_deleted[n]=total/count;
+            for(j=n+1;j<this->num_sample;j++){
+                total_n_th_value_deleted-=results[n*this->num_sample-n*(n+1)/2+(j-n-1)];
+            }
+            fp_sample_n_th_value_deleted[n]=total_n_th_value_deleted/(count-this->num_sample+1);
         }
-
-        double psi[this->num_sample];
-        // double ps=0, Vps=0;
         for(int i=0;i<this->num_sample;i++){
             psi[i] = this->num_sample * fp_sample - (this->num_sample-1) * fp_sample_n_th_value_deleted[i];
-            // ps += psi[i];
         }
-        // ps = ps  / this->num_sample;
-        // for(int i=0;i<this->num_sample;i++){
-        //     Vps += pow(psi[i] - ps, 2);
-        //     // std::cout << psi[i] << " " << psi[i]-ps << std::endl;
-        // }
-        // Vps = Vps / (this->num_sample-1);
-
         // auto t3 = std::chrono::system_clock::now();
         // dur = t3 - t2;
         // msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
@@ -501,7 +520,8 @@ void FramePotential::calculate() {
         for(int i=0;i<this->num_sample;i++){
             std::cout << psi[i] << std::endl;
         }
-        // std::cout << fp_sample << ", " << ps << ", " << 1.960*pow(Vps/this->num_sample, 0.5) << std::endl;
+
+        delete results, fp_sample_n_th_value_deleted, psi;
     }else if(this->culcType == CulculateType::B15){
         /*B15*/
         while (true) {
@@ -746,8 +766,8 @@ int rc_test(){
     // }
 
     std::string circ_type = "RC";
-    int ntimes=10;
-    int Nq=7;
+    int ntimes=1;
+    int Nq=6;
     int depth=-1;
     int t=3;
     int Nsample=100;
@@ -777,7 +797,7 @@ int main_jackknife(int argc, char *argv[]){
     int Nsample=atoi(argv[5]);//1000;
     // std::cout << Nq << ", " << depth << ", " << t << ", " << Nsample << ", " << circ_type << std::endl;
 
-    if(Nq>10 || depth>30 || t>6 || Nsample>10000){
+    if(Nq>10 || depth>30){
         printf("can't allocate memory.");
         return 0;
     }
@@ -810,7 +830,7 @@ int main_B12(int argc, char *argv[]) {
     int t=atoi(argv[5]);//4;
     int Nsample=atoi(argv[6]);//100;
 
-    if(ntimes>100000 || Nq>10 || depth>30 || t>6 || Nsample>10000){
+    if(ntimes>100000 || Nq>10 ){
         printf("can't allocate memory.");
         return 0;
     }
@@ -836,8 +856,19 @@ int main_B12(int argc, char *argv[]) {
     return 0;
 }
 
+// int measure_time() {
+//     std::chrono::_V2::system_clock::time_point t1, t2;
+//     std::chrono::nanoseconds dur;
+//     int64_t msec;
+//     t1 = std::chrono::system_clock::now();
+//     t2 = std::chrono::system_clock::now();
+//     dur = t2 - t1;
+//     msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+//     std::cout << "calculate time : " << msec << " milli sec." << std::endl;
+// }
+
 int main(int argc, char *argv[]) {
-    // rc_test();
+    rc_test();
     // main_jackknife(argc, argv);
-    main_B12(argc, argv);
+    // main_B12(argc, argv);
 }

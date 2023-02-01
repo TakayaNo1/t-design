@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 from pandas import Series,DataFrame
 import numpy as np
@@ -18,7 +19,7 @@ B15 = "B15"
 B12_JACKKNIFE = "B12_Jackknife"
 
 class Para:
-    def __init__(self, culcType=B12, circuit="LRC", Ntimes=1000, depth=11, t=1, Nq=7, Nsample=100) -> None:
+    def __init__(self, culcType=B12, circuit="LRC", Ntimes=1000, depth=10, t=1, Nq=7, Nsample=100) -> None:
         self.culcType=culcType
         self.circuit=circuit
         self.Ntimes=Ntimes
@@ -227,44 +228,67 @@ def chebyshevs_inequality_confidence_interval(data :Series, k:int=3) -> tuple[fl
 
 def main_jackknife():
     Nq_list=[2,3,4,5,6,7]
-    # Nq_list=[3,4,5,6,7]
     t_list=[1,2,3,4]
-    circuit='RC'
-
-    for t in t_list:
-        csv=DataFrame(columns=Nq_list, index=["ps", "vps", "conf", "skew", "kurt"], dtype=float)
+    depth=10
+    circuit_list={'RC', 'LRC', 'RDC'}
+    csv=DataFrame(columns=Nq_list, index=t_list, dtype=object)
+    for circuit in circuit_list:
         for Nq in Nq_list:
-            para=Para(culcType=B12_JACKKNIFE, circuit=circuit, t=t, depth=10, Nq=Nq, Nsample=1000)
-            data=get_data(para)
-            if data is None:
-                continue
-            ps_mean=np.mean(data)
-            vps=np.sum([math.pow(psi-ps_mean, 2) for psi in data]) / (len(data)-1)
-            conf = 1.960 * math.sqrt(vps/len(data))
-            csv[Nq]["ps"] = ps_mean
-            csv[Nq]["vps"] = vps
-            csv[Nq]["conf"] = conf
-            csv[Nq]["skew"] = data.skew()
-            csv[Nq]["kurt"] = data.kurt()
+            for t in t_list:
+                para=Para(culcType=B12_JACKKNIFE, circuit=circuit, t=t, depth=depth, Nq=Nq, Nsample=1000)
+                data=get_data(para)
+                if data is None:
+                    continue
+                ps_mean=np.mean(data)
+                vps=np.sum([math.pow(psi-ps_mean, 2) for psi in data]) / (len(data)-1)
+                conf = 1.960 * math.sqrt(vps/len(data))
+                csv[Nq][t] = f"{round(ps_mean, 3)}{'±'}{round(conf, 3)}"
         print(csv)
-        csv.to_csv(f'{ROOT_PATH}/result/total/jackknife_{circuit}_t{t}.csv')
+        csv.to_csv(f'{ROOT_PATH}/result/total/jackknife95_{circuit}_D{depth}.csv')
+
+    Nq_list=[2,3,4,5,6,7]
+    depth_list=[3,4,5,6,7,8,9,10]
+    t_list=[1,2,3,4]
+    circuit_list={'LRC', 'RDC'}
+    for circuit in circuit_list:
+        for t in t_list:
+            csv=DataFrame(columns=Nq_list, index=depth_list, dtype=object)
+            for Nq in Nq_list:
+                for depth in depth_list:
+                    para=Para(culcType=B12_JACKKNIFE, circuit=circuit, t=t, depth=depth, Nq=Nq, Nsample=1000)
+                    data=get_data(para)
+                    if data is None:
+                        continue
+                    ps_mean=np.mean(data)
+                    vps=np.sum([math.pow(psi-ps_mean, 2) for psi in data]) / (len(data)-1)
+                    conf = 1.960 * math.sqrt(vps/len(data))
+                    csv[Nq][depth] = f"{round(ps_mean, 3)}{'±'}{round(conf, 3)}"
+            print(csv)
+            csv.to_csv(f'{ROOT_PATH}/result/total/jackknife95_{circuit}_t{t}.csv')
 
     # Nq_list=[2,3,4,5,6,7]
     # t_list=[1,2,3,4]
-    # circuit='RC'
-    # N=10
-    # csv=DataFrame(columns=Nq_list, index=t_list, dtype=object)
-    # for Nq in Nq_list:
+    # circuit_list={'LRC', 'RDC'}
+    # for circuit in circuit_list:
     #     for t in t_list:
-    #         para=Para(culcType=B12, circuit=circuit, Ntimes=1000, t=t, Nq=Nq, Nsample=100)
-    #         data=get_data(para)
-    #         if data is None:
-    #             continue
-    #         mean, H=chebyshevs_inequality_confidence_interval(data[0:N], k=3)
-    #         # mean, H=chebyshevs_inequality_confidence_interval(np.sort(data)[100:-100], k=3)
-    #         print(Nq, t, mean, H)
-    #         csv[Nq][t] = (int(mean*1000)/1000, int(H*1000)/1000)
-    # csv.to_csv(f'{ROOT_PATH}/result/total/{circuit}_size{N}.csv')
+    #         csv=DataFrame(columns=[f"{Nq}qubit" for Nq in Nq_list], index=["ps", "vps", "conf", "skew", "kurt", "result"], dtype=object)
+    #         for Nq in Nq_list:
+    #             para=Para(culcType=B12_JACKKNIFE, circuit=circuit, t=t, depth=10, Nq=Nq, Nsample=1000)
+    #             data=get_data(para)
+    #             if data is None:
+    #                 continue
+    #             ps_mean=np.mean(data)
+    #             vps=np.sum([math.pow(psi-ps_mean, 2) for psi in data]) / (len(data)-1)
+    #             conf = 1.960 * math.sqrt(vps/len(data))
+    #             csv[f"{Nq}qubit"]["ps"] = ps_mean
+    #             csv[f"{Nq}qubit"]["vps"] = vps
+    #             csv[f"{Nq}qubit"]["conf"] = conf
+    #             csv[f"{Nq}qubit"]["skew"] = data.skew()
+    #             csv[f"{Nq}qubit"]["kurt"] = data.kurt()
+    #             csv[f"{Nq}qubit"]["result"] = f"{round(ps_mean, 4)}{'±'}{round(conf, 4)}"
+    #             # csv[f"{Nq}qubit"]["result"] = (ps_mean, conf)
+    #         # print(csv)
+    #         csv.to_csv(f'{ROOT_PATH}/result/total/jackknife_{circuit}_t{t}.csv')
 
     # t_list=[1,2,3,4]
     # for t in t_list:
@@ -285,73 +309,101 @@ def main_jackknife():
     #     plt.savefig(f"{ROOT_PATH}/result/figure/{title}.png")
     #     plt.clf()
 
-def main_bootstrap():
-    Nq=6
+def main_bootstrap(alpha=0.95):
+    Nq_list=[2,3,4,5,6,7]
     depth_list=[5,6,7,8,9,10,11,12,13,14]
     t_list=[1,2,3,4,5,6]
     # Nsample=200
     rng=np.random.default_rng()
-
-    for depth in depth_list:
-        print(depth)
+    Ntimes=1000
+    Nsample=100
+    circuit_list={'LRC', 'RDC'}
+    for circuit in circuit_list:
         for t in t_list:
-            para=Para(culcType=B12, circuit="RC", Ntimes=1000, depth=depth, t=t, Nq=Nq, Nsample=100)
+            csv=DataFrame(columns=Nq_list, index=depth_list, dtype=object)
+            for Nq in Nq_list:
+                for depth in depth_list:
+                    para=Para(culcType=B12, circuit=circuit, Ntimes=Ntimes, t=t, depth=depth, Nq=Nq, Nsample=Nsample)
+                    data=get_data(para)
+                    if data is None:
+                        continue
+                    ci_mean=bootstrap((data,), np.mean, confidence_level=alpha, n_resamples=10000, random_state=rng, method="BCa")
+                    mean=round(ci_mean[1], 3)
+                    lci=round(ci_mean[0]-ci_mean[1], 3)
+                    rci=round(ci_mean[2]-ci_mean[1], 3)
+                    # print(Nq, t, mean, lci, rci)
+                    csv[Nq][depth] = f"{mean} +{rci}, {lci}"
+            print(csv)
+            csv.to_csv(f'{ROOT_PATH}/result/total/bootstrap{alpha}_{circuit}_t{t}_Ntimes{Ntimes}_Nsample{Nsample}.csv', sep="\t")
+    
+    Nq_list=[2,3,4,5,6,7]
+    t_list=[1,2,3,4]
+    depth=10
+    circuit_list={'RC', 'LRC', 'RDC'}
+    rng=np.random.default_rng()
+    csv=DataFrame(columns=Nq_list, index=t_list, dtype=object)
+    for circuit in circuit_list:
+        for Nq in Nq_list:
+            for t in t_list:
+                para=Para(culcType=B12, circuit=circuit, depth=depth, Ntimes=Ntimes, t=t, Nq=Nq, Nsample=Nsample)
+                data=get_data(para)
+                if data is None:
+                    continue
+                ci_mean=bootstrap((data,), np.mean, confidence_level=alpha, n_resamples=10000, random_state=rng, method="BCa")
+                mean=round(ci_mean[1], 3)
+                lci=round(ci_mean[0]-ci_mean[1], 3)
+                rci=round(ci_mean[2]-ci_mean[1], 3)
+                print(Nq, t, mean, lci, rci)
+                csv[Nq][t] = f"{mean} +{rci}, {lci}"
+        csv.to_csv(f'{ROOT_PATH}/result/total/bootstrap{alpha}_{circuit}_Ntimes{Ntimes}_Nsample{Nsample}.csv', sep="\t")
 
-            data=get_data(para)
-            ci_mean=bootstrap((data,), np.mean, confidence_level=0.89, n_resamples=10000, random_state=rng, method="BCa")#.confidence_interval
-            ci_mean2=bootstrap((data,), np.mean, confidence_level=0.89, n_resamples=10000, random_state=rng, method="basic")
-            # print(f"t={t} ,{round(ci_mean[0], 4)} ,{round(ci_mean[1], 4)} ,{round(ci_mean[2], 4)}")
-            print(f"t={t} ,{round(ci_mean[0]-ci_mean[1], 4)} ,{round(ci_mean[1], 4)} ,{round(ci_mean[2]-ci_mean[1], 4)} ,{round(ci_mean2[0]-ci_mean2[1], 4)} ,{round(ci_mean2[1], 4)} ,{round(ci_mean2[2]-ci_mean2[1], 4)}")
-            # ci_mean=bootstrap((data,), pt, confidence_level=0.89, n_resamples=10000, random_state=rng)#.confidence_interval
-            # print(f"t={t} & {round(ci_mean[0], 4)} & {round(ci_mean[1], 4)} & {round(ci_mean[2], 4)} \\\\ \\hline")
-            # ci_median=bootstrap((data,), np.median, confidence_level=0.89, n_resamples=10000, random_state=rng).confidence_interval
-            # print(f"t={t} & {round(ci_median[0], 4)} & {round(ci_median[1], 4)} \\\\ \\hline")
-            # ci_std=bootstrap((data,), np.std, confidence_level=0.89, n_resamples=10000, random_state=rng).confidence_interval
-            # print(f"t={t} & {round(ci_std[0], 4)} & {round(ci_std[1], 4)} \\\\ \\hline")
-
-def main_chebyshevs():
-    # Nq_list=[2,3,4,5,6,7]
-    # # Nq_list=[3,4,5,6,7]
-    # t_list=[1,2,3,4]
-    # depth_list=[3,4,5,6,7,8,9,10]
-    # Ntimes=40
-    # Nsample=25
-    # circuit='LRC'
-
-    # for t in t_list:
-    #     csv=DataFrame(columns=Nq_list, index=depth_list, dtype=object)
-    #     for Nq in Nq_list:
-    #         for depth in depth_list:
-    #             para=Para(culcType=B12, circuit=circuit, Ntimes=Ntimes, t=t, depth=depth, Nq=Nq, Nsample=Nsample)
-    #             data=get_data(para)
-    #             if data is None:
-    #                 continue
-    #             mean, H=chebyshevs_inequality_confidence_interval(data, k=3)
-    #             csv[Nq][depth] = (int(mean*1000)/1000, int(H*1000)/1000)
-    #             # print(Nq, depth, mean, H)
-    #     print(csv)
-    #     csv.to_csv(f'{ROOT_PATH}/result/total/{circuit}_t{t}_Ntimes{Ntimes}_Nsample{Nsample}.csv')
+def main_chebyshevs(alpha=0.95):
+    Nq_list=[2,3,4,5,6,7]
+    # Nq_list=[3,4,5,6,7]
+    t_list=[1,2,3,4]
+    depth_list=[3,4,5,6,7,8,9,10]
+    Ntimes=40
+    Nsample=25
+    circuit_list={'LRC', 'RDC'}
+    for circuit in circuit_list:
+        for t in t_list:
+            csv=DataFrame(columns=Nq_list, index=depth_list, dtype=object)
+            for Nq in Nq_list:
+                for depth in depth_list:
+                    para=Para(culcType=B12, circuit=circuit, Ntimes=Ntimes, t=t, depth=depth, Nq=Nq, Nsample=Nsample)
+                    data=get_data(para)
+                    if data is None:
+                        continue
+                    mean, H=chebyshevs_inequality_confidence_interval(data, k=math.sqrt(1./(1-alpha)))
+                    csv[Nq][depth] = f"{round(mean, 3)}{'±'}{round(H, 3)}"
+                    # csv[Nq][depth] = (int(mean*1000)/1000, int(H*1000)/1000)
+                    # print(Nq, depth, mean, H)
+            print(csv)
+            csv.to_csv(f'{ROOT_PATH}/result/total/chebyshevs{alpha}_{circuit}_t{t}_Ntimes{Ntimes}_Nsample{Nsample}.csv')
 
     Nq_list=[2,3,4,5,6,7]
     t_list=[1,2,3,4]
-    Ntimes=40
-    Nsample=25
-    circuit='RC'
+    depth=10
+    circuit_list={'RC', 'LRC', 'RDC'}
     csv=DataFrame(columns=Nq_list, index=t_list, dtype=object)
-    for Nq in Nq_list:
-        for t in t_list:
-            para=Para(culcType=B12, circuit=circuit, Ntimes=Ntimes, t=t, Nq=Nq, Nsample=Nsample)
-            data=get_data(para)
-            if data is None:
-                continue
-            mean, H=chebyshevs_inequality_confidence_interval(data, k=3)
-            # mean, H=chebyshevs_inequality_confidence_interval(np.sort(data)[100:-100], k=3)
-            print(Nq, t, mean, H)
-            csv[Nq][t] = (int(mean*1000)/1000, int(H*1000)/1000)
-    csv.to_csv(f'{ROOT_PATH}/result/total/{circuit}_Ntimes{Ntimes}_Nsample{Nsample}.csv')
+    for circuit in circuit_list:
+        for Nq in Nq_list:
+            for t in t_list:
+                para=Para(culcType=B12, circuit=circuit, depth=depth, Ntimes=Ntimes, t=t, Nq=Nq, Nsample=Nsample)
+                data=get_data(para)
+                if data is None:
+                    continue
+                mean, H=chebyshevs_inequality_confidence_interval(data, k=math.sqrt(1./(1-alpha)))
+                # mean, H=chebyshevs_inequality_confidence_interval(np.sort(data)[100:-100], k=3)
+                print(Nq, t, mean, H)
+                csv[Nq][t] = f"{round(mean, 3)}{'±'}{round(H, 3)}"
+                # csv[Nq][t] = (int(mean*1000)/1000, int(H*1000)/1000)
+        csv.to_csv(f'{ROOT_PATH}/result/total/chebyshevs{alpha}_{circuit}_Ntimes{Ntimes}_Nsample{Nsample}.csv')
 
 if __name__ == "__main__":
-    # main_bootstrap()
-    main_chebyshevs()
+    alpha=[0.89, 0.95]
+    for a in alpha:
+        # main_chebyshevs(alpha=a)
+        main_bootstrap(alpha=a)
     # main_jackknife()
     # test()
