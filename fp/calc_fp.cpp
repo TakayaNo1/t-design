@@ -11,10 +11,8 @@
 #include <iomanip>
 #include <string>
 #include <complex>
-//#include <Eigen/KroneckerProduct>
 #include <experimental/filesystem>
 #include <cmath>
-#include <chrono>
 
 #include <boost/multiprecision/cpp_int.hpp>
 namespace mp = boost::multiprecision;
@@ -82,42 +80,11 @@ ComplexMatrix gen_haar_RU(unsigned int num_qubits) {
     return Q;
 }
 
-/** Function to return the current date and time as string
- * Used to specify initial seed values, file names, etc.
- * Example) 22:58:45, June 29, 2021  => "20210629225845"
+/**
+ * estimators of a frame potential
+ * 
+ * Ref: https://arxiv.org/pdf/2205.14667.pdf
  */
-inline std::string getDatetimeStr() {
-#if defined(__GNUC__) || defined(__INTEL_COMPILER)
-    //Linux(GNU, intel Compiler)
-    time_t t = time(nullptr);
-    const tm* localTime = localtime(&t);
-    std::stringstream s;
-    s << "20" << localTime->tm_year - 100;
-    //zerofill using setw() and setfill()
-    s << std::setw(2) << std::setfill('0') << localTime->tm_mon + 1;
-    s << std::setw(2) << std::setfill('0') << localTime->tm_mday;
-    s << std::setw(2) << std::setfill('0') << localTime->tm_hour;
-    s << std::setw(2) << std::setfill('0') << localTime->tm_min;
-    s << std::setw(2) << std::setfill('0') << localTime->tm_sec;
-#elif _MSC_VER
-    //Windows(Visual C++ Compiler)
-    time_t t;
-    struct tm localTime;
-    time(&t);
-    localtime_s(&localTime, &t);
-    std::stringstream s;
-    s << "20" << localTime.tm_year - 100;
-    //zerofill using setw() and setfill()
-    s << std::setw(2) << std::setfill('0') << localTime.tm_mon + 1;
-    s << std::setw(2) << std::setfill('0') << localTime.tm_mday;
-    s << std::setw(2) << std::setfill('0') << localTime.tm_hour;
-    s << std::setw(2) << std::setfill('0') << localTime.tm_min;
-    s << std::setw(2) << std::setfill('0') << localTime.tm_sec;
-#endif
-    //return the value as std::string
-    return s.str();
-}
-
 enum CulculateType{
     /**
      * U = {U_1 .. U_M}
@@ -141,20 +108,26 @@ enum CulculateType{
     B15 = 2
 };
 
+/**
+ * GENERATORS AND RELATIONS FOR n-QUBIT CLIFFORD OPERATORS
+ * Ref: https://arxiv.org/pdf/1310.6813.pdf
+ */
 class CliffordGroup{
 private:
-    int Nq;
-    mp::cpp_int order=1;
-    std::vector<ComplexMatrix> A,B,C,D,E;
-    std::vector<mp::cpp_int> Lcounts = {0};
-    std::vector<mp::cpp_int> Rcounts = {0};
-    std::vector<mp::cpp_int> Lsum = {0};
+    int Nq;                                     //number of qubit
+    mp::cpp_int order=1;                        //order of clifford group
+    std::vector<ComplexMatrix> A,B,C,D,E;       //A convenient gate set for Clifford circuits
+    std::vector<mp::cpp_int> Lcounts = {0};     //
+    std::vector<mp::cpp_int> Rcounts = {0};     //
+    std::vector<mp::cpp_int> Lsum = {0};        //
 
+    /*return pow(2, n)*/
     unsigned long long pow2(int n){
         unsigned long long r=1;
         for(int i=0;i<n;i++)r*=2;
         return r;
     }
+    /*return identity matrix of size n*n */
     ComplexMatrix identity(long n){
         return Eigen::MatrixXd::Identity(n, n);
     }
@@ -304,7 +277,7 @@ public:
         mat /= pow(mat.determinant(), pow(2, -Nq));
         return mat;
     }
-
+    /*return random sample matrix*/
     ComplexMatrix sample(){
         Random random;
         // mp::cpp_int r1 = random.int64();
@@ -341,14 +314,16 @@ private:
     double epsilon;             //convergence error
     unsigned int patience;      //Number used to determine convergence
    
-    std::string circuit;        //Specify "LRC" or "RDC" as string type
+    std::string circuit;        //Specify "RC", "LRC" or "RDC" as string type
     unsigned int num_gates_depthOdd;  //Number of 2-qubit Haar random unitaries at odd order depths
     unsigned int num_gates_depthEven; //Number of 2-qubit Haar random unitaries at even order depths
 
-    enum CulculateType culcType; 
+    enum CulculateType culcType; //estimator type of a frame potential
 
     std::vector<double> result_oneshot;
     std::vector<double> result_mean;
+    
+    CliffordGroup cliffordGroup;
 
     /* sample unitary randomly */
     ComplexMatrix sample_unitary();
@@ -373,7 +348,6 @@ public:
         this->result_mean.clear();
     }
 
-    CliffordGroup cliffordGroup;
 
     /* setter of parameters */
     void set_paras(unsigned int Nq, unsigned int D, unsigned int dim_t, unsigned int Nsample, double eps, unsigned int pat);
@@ -381,18 +355,9 @@ public:
         this->culcType=type;
     }
 
-    /* calculate the value of Frame Potential until it converges */
+    /* calculate the value of Frame Potential */
     void calculate();
     void clear_result();
-
-    /* output the calculation result */
-    void output();
-
-    /* File output of calculation results */
-    void save_result(std::string file_name);
-
-    /* getter of calculation results */
-    double get_result();
 };
 
 void FramePotential::set_paras(unsigned int Nq, unsigned int D, unsigned int dim_t, unsigned int Nsample, double eps = 0.0001, unsigned int pat = 5) {
@@ -432,14 +397,9 @@ void FramePotential::calculate() {
         double total=0, result;
         std::vector<ComplexMatrix> samples;
 
-        // auto t1 = std::chrono::system_clock::now();
         for(int i=0;i<this->num_sample;i++){
             samples.push_back(sample_unitary());
         }
-        // auto t2 = std::chrono::system_clock::now();
-        // auto dur = t2 - t1;
-        // auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-        // std::cout << "sample time : " << msec << " milli sec." << std::endl;
         
         for(int i=0;i<this->num_sample;i++){
             for(int j=i+1;j<this->num_sample;j++){
@@ -450,10 +410,6 @@ void FramePotential::calculate() {
                 total+=result;
             }
         }
-        // auto t3 = std::chrono::system_clock::now();
-        // dur = t3 - t2;
-        // msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-        // std::cout << "calculate time : " << msec << " milli sec." << std::endl;
         std::cout << total/count << std::endl;
     }else if(this->culcType == CulculateType::B12_Jackknife){
         double total=0, result, total_n_th_value_deleted;
@@ -464,16 +420,10 @@ void FramePotential::calculate() {
         double *psi=new double[this->num_sample];
         int i,j,n;
 
-        // auto t1 = std::chrono::system_clock::now();
         for(i=0;i<this->num_sample;i++){
             samples.push_back(sample_unitary());
         }
 
-        // auto t2 = std::chrono::system_clock::now();
-        // auto dur = t2 - t1;
-        // auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-        // std::cout << "sample time : " << msec << " milli sec." << std::endl;
-        
         for(i=0;i<this->num_sample;i++){
             for(j=i+1;j<this->num_sample;j++){
                 count++;
@@ -512,10 +462,6 @@ void FramePotential::calculate() {
         for(int i=0;i<this->num_sample;i++){
             psi[i] = this->num_sample * fp_sample - (this->num_sample-1) * fp_sample_n_th_value_deleted[i];
         }
-        // auto t3 = std::chrono::system_clock::now();
-        // dur = t3 - t2;
-        // msec = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-        // std::cout << "calculate time : " << msec << " milli sec." << std::endl;
         std::cout << "value" << std::endl;
         for(int i=0;i<this->num_sample;i++){
             std::cout << psi[i] << std::endl;
@@ -636,128 +582,6 @@ bool FramePotential::check_convergence() {
     return flag;
 }
 
-void FramePotential::output() {
-    std::cout << std::endl << "*** Result ***" << std::endl;
-    std::cout << "num_qubits : " << this->num_qubits << std::endl;
-    std::cout << "depth : " << this->depth << std::endl;
-    std::cout << "t : " << this->t << std::endl;
-    std::cout << "epsilon : " << this->epsilon << std::endl;
-    std::cout << "patience : " << this->patience << std::endl;
-    std::cout << "FramePotential : " << this->result_mean.back() << std::endl << std::endl;
-}
-
-void FramePotential::save_result(std::string file_name = getDatetimeStr() + ".csv") {
-    std::string path = "./result/" + file_name;
-
-    std::ofstream csv_file(path);
-    csv_file << "circ:" << this->circuit << ",t:" << this->t << std::endl;
-    csv_file << "Nq:" << this->num_qubits << ",depth:" << this->depth << std::endl;
-    csv_file << "epsilon:" << this->epsilon << ",patience:" << this->patience << std::endl;
-    csv_file << "shot,average" << std::endl;
-
-    for (unsigned long long int i = 0; i < this->result_oneshot.size(); i++) {
-        csv_file << this->result_oneshot[i] << "," << this->result_mean[i] << std::endl;
-    }
-    csv_file.close();
-}
-
-double FramePotential::get_result() {
-    return this->result_mean.back();
-}
-
-
-int test() {
-    //Execution example
-    /* set parameters */
-    int ntimes = 10;
-    std::vector<int> Nq_list = { 7 };
-    std::vector<int> depth_list = { 11,12,13,14,15 };
-    std::vector<int> t_list = { 2,3,4,5 };
-    std::vector<int> Nsample_list = {100};
-    double eps = 0.0001;
-    unsigned int pat = 5;
-    /* Specify the circuit */
-    std::string circ_type = "LRC";
-    //std::string circ_type = "RDC";
-    
-    /* call the class */
-    FramePotential FP = { circ_type };
-
-    /* begin calculation */
-    for(int l = 0; l < Nsample_list.size(); l++){
-        for (int i = 0; i < t_list.size(); i++) {
-            for (int j = 0; j < Nq_list.size(); j++) {
-                for (int k = 0; k < depth_list.size(); k++) {
-                    //set parameters
-                    std::cout << "sample:" << Nsample_list[l] << ", t:" << t_list[i] << ", depth:" << depth_list[k] << std::endl;
-                    FP.set_paras(Nq_list[j], depth_list[k], t_list[i], Nsample_list[l], eps, pat);
-                    //Variables for calculating mean and standard deviation values
-                    double ave = 0.0, std = 0.0;
-                    //repeat "n" times
-                    for(int n=0; n < ntimes; n++) {
-                        FP.clear_result();
-                        //begin calculating the value of Frame Potential
-                        FP.calculate();
-                        //get the calculation results and add them up
-                        ave += FP.get_result();
-                        std += (FP.get_result() * FP.get_result());
-                    }
-                    //calculate the average
-                    ave /= ntimes;
-                    //calculate the standard deviation
-                    std = sqrt(std / ntimes - ave * ave);
-
-                    std::cout << "\tave:" << ave << ", std:" << std << std::endl;
-                }
-            }
-        }
-    }
-
-    /*
-    for (int i = 0; i < t_list.size(); i++) {
-        for (int j = 0; j < Nq_list.size(); j++) {
-            for (int k = 0; k < depth_list.size(); k++) {
-                //set parameters
-                FP.set_paras(Nq_list[j], depth_list[k], t_list[i], eps, pat);
-                std::cout << std::endl << "Now => Nq:" << Nq_list[j] << ", depth:" << depth_list[k] << ", t:" << t_list[i] << std::endl;
-                //set directory name
-                std::string dir_name = "B12_"+circ_type
-                                        + "_Nq" + std::to_string(Nq_list[j])
-                                        + "_depth" + std::to_string(depth_list[k])
-                                        + "_t" + std::to_string(t_list[i]);
-                //making directory
-                std::filesystem::create_directory("result/" + dir_name);
-                //Variables for calculating mean and standard deviation values
-                double ave = 0.0, std = 0.0;
-                //repeat "n" times
-                for(int n=0; n < ntimes; n++) {
-                    FP.clear_result();
-                    //begin calculating the value of Frame Potential
-                    FP.calculate();
-                    //FP.output();
-                    //save the log
-                    FP.save_result(dir_name + "/n=" + std::to_string(n) + ".csv");
-                    //get the calculation results and add them up
-                    ave += FP.get_result();
-                    std += (FP.get_result() * FP.get_result());
-                }
-                //calculate the average
-                ave /= ntimes;
-                //calculate the standard deviation
-                std = sqrt(std / ntimes - ave * ave);
-                //output the result
-                std::cout << "  result : " << ave << "±" << std << std::endl;
-                //save the result
-                std::ofstream result_file("./result/" + dir_name + "/ave_std.txt");
-                result_file << ave << "±" << std << std::endl;
-                result_file.close();
-            }
-        }
-    }
-    */
-    return 0;
-}
-
 int rc_test(){
     // CliffordGroup rc(Nq);
     // for(int i=1;i<=3;i++){
@@ -868,7 +692,26 @@ int main_B12(int argc, char *argv[]) {
 // }
 
 int main(int argc, char *argv[]) {
-    rc_test();
+    // rc_test();
     // main_jackknife(argc, argv);
     // main_B12(argc, argv);
+    int q=7,n=1000,t=5;
+    double total=0, result;
+    std::vector<ComplexMatrix> samples;
+    unsigned long long int count = 0;
+    ComplexMatrix U, Vdag;
+    
+    for(int i=0;i<n;i++){
+        samples.push_back(gen_haar_RU(q));
+    }
+    for(int i=0;i<n;i++){
+        for(int j=i+1;j<n;j++){
+            count++;
+            U=samples[i];
+            Vdag=samples[j].adjoint();
+            result=pow(abs((Vdag*U).trace()), 2. * t);
+            total+=result;
+        }
+    }
+    std::cout << total/count << std::endl;
 }

@@ -14,10 +14,12 @@ import matplotlib.pyplot as plt
 
 ROOT_PATH = "/mnt/d/quantum"
 
+#estimator type of a frame potential
 B12 = "B12"
 B15 = "B15"
 B12_JACKKNIFE = "B12_Jackknife"
 
+#parameters class
 class Para:
     def __init__(self, culcType=B12, circuit="LRC", Ntimes=1000, depth=10, t=1, Nq=7, Nsample=100) -> None:
         self.culcType=culcType
@@ -56,119 +58,121 @@ def get_data(para : Para) -> Series or None:
     except KeyError:
         return None
 
-def ecdf(data :Series):
-    n=len(data)
-    x=np.sort(data)
-    y=np.arange(1,n+1)/n
-    return x,y
+# def ecdf(data :Series):
+#     n=len(data)
+#     x=np.sort(data)
+#     y=np.arange(1,n+1)/n
+#     return x,y
 
-def save_plot_ecdf_image(data :Series, para :Para):
-    """Plot ecdf"""
-    # Call get_ecdf function and assign the returning values
-    x, y = ecdf(data)
+# def save_plot_ecdf_image(data :Series, para :Para):
+#     """Plot ecdf"""
+#     # Call get_ecdf function and assign the returning values
+#     x, y = ecdf(data)
     
-    plt.clf()
-    plt.plot(x,y,marker='.',linestyle='none')
-    plt.xlabel("FP")
-    plt.ylabel("")
-    plt.title("ECDF")
-    plt.savefig("{ROOT_PATH}/result/figure/ecdf_"+get_file_name(para)+".png")
+#     plt.clf()
+#     plt.plot(x,y,marker='.',linestyle='none')
+#     plt.xlabel("FP")
+#     plt.ylabel("")
+#     plt.title("ECDF")
+#     plt.savefig("{ROOT_PATH}/result/figure/ecdf_"+get_file_name(para)+".png")
 
-def draw_bs_replicates(data :Series, func, size :int):
-    """creates a bootstrap sample, computes replicates and returns replicates array"""
-    # Create an empty array to store replicates
-    bs_replicates = np.empty(size)
+# def draw_bs_replicates(data :Series, func, size :int):
+#     """creates a bootstrap sample, computes replicates and returns replicates array"""
+#     # Create an empty array to store replicates
+#     bs_replicates = np.empty(size)
     
-    # Create bootstrap replicates as much as size
-    for i in range(size):
-        # Create a bootstrap sample
-        bs_sample = np.random.choice(data,size=len(data))
-        # Get bootstrap replicate and append to bs_replicates
-        bs_replicates[i] = func(bs_sample)
+#     # Create bootstrap replicates as much as size
+#     for i in range(size):
+#         # Create a bootstrap sample
+#         bs_sample = np.random.choice(data,size=len(data))
+#         # Get bootstrap replicate and append to bs_replicates
+#         bs_replicates[i] = func(bs_sample)
     
-    return bs_replicates
+#     return bs_replicates
 
-def save_some_plot_image(para:Para):
-    plt.clf()
-    data_files=[]
-    for f in Path("{ROOT_PATH}/result/").glob(f"*/{glob_file_name(para)}.csv"):
-        data_files.append(str(f))
-    size=len(data_files)
-    fig = plt.figure(figsize=(5*size,5))
-    percentiles = {}
-    for i in range(size):
-        file=data_files[i]
-        Ntimes=int(re.findall(r'_([0-9]+)times_', str(file))[0])
-        Nsample=int(re.findall(r'_sample([0-9]+).', str(file))[0])
-        para.Ntimes=Ntimes
-        para.Nsample=Nsample
-        data=get_data(para)
-        bs_replicates_data = draw_bs_replicates(data,np.mean,15000)
+# def save_some_plot_image(para:Para):
+#     plt.clf()
+#     data_files=[]
+#     for f in Path("{ROOT_PATH}/result/").glob(f"*/{glob_file_name(para)}.csv"):
+#         data_files.append(str(f))
+#     size=len(data_files)
+#     fig = plt.figure(figsize=(5*size,5))
+#     percentiles = {}
+#     for i in range(size):
+#         file=data_files[i]
+#         Ntimes=int(re.findall(r'_([0-9]+)times_', str(file))[0])
+#         Nsample=int(re.findall(r'_sample([0-9]+).', str(file))[0])
+#         para.Ntimes=Ntimes
+#         para.Nsample=Nsample
+#         data=get_data(para)
+#         bs_replicates_data = draw_bs_replicates(data,np.mean,15000)
 
-        hist_ax=fig.add_subplot(2,size,i+1)
-        bs_ax=fig.add_subplot(2,size,size+i+1)
+#         hist_ax=fig.add_subplot(2,size,i+1)
+#         bs_ax=fig.add_subplot(2,size,size+i+1)
 
-        hist_ax.set_title(f"{Ntimes}times Nsample:{Nsample}")
-        hist_ax.hist(data,bins=30,density=True)
-        # p1=[2.5]
-        # p2=[97.5]
-        p1=[5.5]
-        p2=[94.5]
-        pt_left=np.percentile(data,p1)
-        pt_center=np.percentile(data,[50])
-        pt_right=np.percentile(data,p2)
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p1[0]}']=pt_left
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{50}']=pt_center
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p2[0]}']=pt_right
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_minus']=pt_left-pt_center
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_plus']=pt_right-pt_center
-        hist_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
-        hist_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
-        # hist_ax.legend(loc = 'upper right')
-        bs_ax.hist(bs_replicates_data,bins=30,density=True)
-        pt_left=np.percentile(bs_replicates_data,[2.5])
-        pt_center=np.percentile(bs_replicates_data,[50])
-        pt_right=np.percentile(bs_replicates_data,[97.5])
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p1[0]}_bs']=pt_left
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{50}_bs']=pt_center
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p2[0]}_bs']=pt_right
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_minus_bs']=pt_left-pt_center
-        percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_plus_bs']=pt_right-pt_center
-        bs_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
-        bs_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
-    # fig.tight_layout()              #レイアウトの設定
-    for k, v in percentiles.items():
-        print(k, "\t", v[0])
+#         hist_ax.set_title(f"{Ntimes}times Nsample:{Nsample}")
+#         hist_ax.hist(data,bins=30,density=True)
+#         # p1=[2.5]
+#         # p2=[97.5]
+#         p1=[5.5]
+#         p2=[94.5]
+#         pt_left=np.percentile(data,p1)
+#         pt_center=np.percentile(data,[50])
+#         pt_right=np.percentile(data,p2)
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p1[0]}']=pt_left
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{50}']=pt_center
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p2[0]}']=pt_right
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_minus']=pt_left-pt_center
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_plus']=pt_right-pt_center
+#         hist_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
+#         hist_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
+#         # hist_ax.legend(loc = 'upper right')
+#         bs_ax.hist(bs_replicates_data,bins=30,density=True)
+#         pt_left=np.percentile(bs_replicates_data,[2.5])
+#         pt_center=np.percentile(bs_replicates_data,[50])
+#         pt_right=np.percentile(bs_replicates_data,[97.5])
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p1[0]}_bs']=pt_left
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{50}_bs']=pt_center
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_{p2[0]}_bs']=pt_right
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_minus_bs']=pt_left-pt_center
+#         percentiles[f'{para.depth}_{para.t}_{Ntimes}_{Nsample}_plus_bs']=pt_right-pt_center
+#         bs_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
+#         bs_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
+#     # fig.tight_layout()              #レイアウトの設定
+#     for k, v in percentiles.items():
+#         print(k, "\t", v[0])
 
-    plt.savefig(f"{ROOT_PATH}/result/figure/all_Nq{para.Nq}_depth{para.depth}_t{para.t}.png")
+#     plt.savefig(f"{ROOT_PATH}/result/figure/all_Nq{para.Nq}_depth{para.depth}_t{para.t}.png")
 
-def test():
-    fig = plt.figure(figsize=(5*2,5))
-    data=np.random.normal(loc=1, scale=1, size=5000)
-    data=np.append(data, np.random.normal(loc=5, scale=1, size=7500))
-    bs_replicates_data = draw_bs_replicates(data,np.mean,5000)
+# def test():
+#     fig = plt.figure(figsize=(5*2,5))
+#     data=np.random.normal(loc=1, scale=1, size=5000)
+#     data=np.append(data, np.random.normal(loc=5, scale=1, size=7500))
+#     bs_replicates_data = draw_bs_replicates(data,np.mean,5000)
 
-    hist_ax=fig.add_subplot(2,1,1)
-    bs_ax=fig.add_subplot(2,1,2)
+#     hist_ax=fig.add_subplot(2,1,1)
+#     bs_ax=fig.add_subplot(2,1,2)
 
-    # hist_ax.set_title(f"{Ntimes}times Nsample:{Nsample}")
-    # p1=[2.5]
-    # p2=[97.5]
-    p1=[5.5]
-    p2=[94.5]
-    hist_ax.hist(data,bins=30,density=True)
-    pt_left=np.percentile(data,p1)
-    pt_right=np.percentile(data,p2)
-    hist_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
-    hist_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
-    bs_ax.hist(bs_replicates_data,bins=30,density=True)
-    pt_left=np.percentile(bs_replicates_data,p1)
-    pt_right=np.percentile(bs_replicates_data,p1)
-    bs_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
-    bs_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
+#     # hist_ax.set_title(f"{Ntimes}times Nsample:{Nsample}")
+#     # p1=[2.5]
+#     # p2=[97.5]
+#     p1=[5.5]
+#     p2=[94.5]
+#     hist_ax.hist(data,bins=30,density=True)
+#     pt_left=np.percentile(data,p1)
+#     pt_right=np.percentile(data,p2)
+#     hist_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
+#     hist_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
+#     bs_ax.hist(bs_replicates_data,bins=30,density=True)
+#     pt_left=np.percentile(bs_replicates_data,p1)
+#     pt_right=np.percentile(bs_replicates_data,p1)
+#     bs_ax.axvline(x=pt_left, ymin=0, ymax=1,label=f'{p1[0]}th percentile',c='y')
+#     bs_ax.axvline(x=pt_right, ymin=0, ymax=1,label=f'{p2[0]}th percentile',c='r')
 
-    plt.savefig(f"{ROOT_PATH}/result/figure/test.png")
+#     plt.savefig(f"{ROOT_PATH}/result/figure/test.png")
 
+# bootstrap confidence interval
+# return left, mean, right
 def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
               vectorized=True, paired=False, axis=0, confidence_level=0.95,
               method='BCa', random_state=None):
@@ -219,7 +223,7 @@ def bootstrap(data, statistic, *, n_resamples=9999, batch=None,
     #                        standard_error=np.std(theta_hat_b, ddof=1, axis=-1))
     return ci_l, np.mean(theta_hat_b), ci_u
 
-def chebyshevs_inequality_confidence_interval(data :Series, k:int=3) -> tuple[float, float]:
+def chebyshevs_inequality_confidence_interval(data :Series, k:float=3) -> tuple[float, float]:
     N=len(data)
     mean=np.mean(data)
     std=np.std(data)
@@ -403,7 +407,7 @@ def main_chebyshevs(alpha=0.95):
 if __name__ == "__main__":
     alpha=[0.89, 0.95]
     for a in alpha:
-        # main_chebyshevs(alpha=a)
+        main_chebyshevs(alpha=a)
         main_bootstrap(alpha=a)
-    # main_jackknife()
+    main_jackknife()
     # test()
